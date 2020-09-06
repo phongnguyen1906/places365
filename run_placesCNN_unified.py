@@ -15,6 +15,9 @@ from multiprocessing import Pool
 from dataclasses import dataclass
 
 
+current_dir = os.path.dirname(os.path.abspath(__file__))
+print(current_dir)
+
  # hacky way to deal with the Pytorch 1.0 update
 def recursion_change_bn(module):
     if isinstance(module, torch.nn.BatchNorm2d):
@@ -32,7 +35,8 @@ def load_labels():
         synset_url = 'https://raw.githubusercontent.com/csailvision/places365/master/categories_places365.txt'
         os.system('wget ' + synset_url)
     classes = list()
-    with open(file_name_category) as class_file:
+    file_name_category_path = os.path.join(current_dir, file_name_category)
+    with open(file_name_category_path) as class_file:
         for line in class_file:
             classes.append(line.strip().split(' ')[0][3:])
     classes = tuple(classes)
@@ -42,7 +46,8 @@ def load_labels():
     if not os.access(file_name_IO, os.W_OK):
         synset_url = 'https://raw.githubusercontent.com/csailvision/places365/master/IO_places365.txt'
         os.system('wget ' + synset_url)
-    with open(file_name_IO) as f:
+    file_name_IO_path = os.path.join(current_dir, file_name_IO)
+    with open(file_name_IO_path) as f:
         lines = f.readlines()
         labels_IO = []
         for line in lines:
@@ -55,14 +60,16 @@ def load_labels():
     if not os.access(file_name_attribute, os.W_OK):
         synset_url = 'https://raw.githubusercontent.com/csailvision/places365/master/labels_sunattribute.txt'
         os.system('wget ' + synset_url)
-    with open(file_name_attribute) as f:
+    file_name_attribute_path = os.path.join(current_dir, file_name_attribute)
+    with open(file_name_attribute_path) as f:
         lines = f.readlines()
         labels_attribute = [item.rstrip() for item in lines]
     file_name_W = 'W_sceneattribute_wideresnet18.npy'
     if not os.access(file_name_W, os.W_OK):
         synset_url = 'http://places2.csail.mit.edu/models_places365/W_sceneattribute_wideresnet18.npy'
         os.system('wget ' + synset_url)
-    W_attribute = np.load(file_name_W)
+    file_name_W_path = os.path.join(current_dir, file_name_W)
+    W_attribute = np.load(file_name_W_path)
 
     return classes, labels_IO, labels_attribute, W_attribute
 
