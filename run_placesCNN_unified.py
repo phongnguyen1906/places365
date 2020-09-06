@@ -11,6 +11,8 @@ import os
 import numpy as np
 import cv2
 from PIL import Image
+from multiprocessing import Pool
+from dataclasses import dataclass
 
 
  # hacky way to deal with the Pytorch 1.0 update
@@ -64,8 +66,6 @@ def load_labels():
 
     return classes, labels_IO, labels_attribute, W_attribute
 
-def hook_feature(module, input, output):
-    features_blobs.append(np.squeeze(output.data.cpu().numpy()))
 
 def returnCAM(feature_conv, weight_softmax, class_idx):
     # generate the class activation maps upsample to 256x256
@@ -112,8 +112,6 @@ def load_model():
     
     model.eval()
 
-
-
     # the following is deprecated, everything is migrated to python36
 
     ## if you encounter the UnicodeDecodeError when use python3 to load the model, add the following line will fix it. Thanks to @soravux
@@ -123,70 +121,158 @@ def load_model():
     #pickle.Unpickler = partial(pickle.Unpickler, encoding="latin1")
     #model = torch.load(model_file, map_location=lambda storage, loc: storage, pickle_module=pickle)
 
-    model.eval()
-    # hook the feature extractor
-    features_names = ['layer4','avgpool'] # this is the last conv layer of the resnet
-    for name in features_names:
-        model._modules.get(name).register_forward_hook(hook_feature)
     return model
-
 
 # load the labels
 classes, labels_IO, labels_attribute, W_attribute = load_labels()
 
-# load the model
-features_blobs = []
-model = load_model()
-
 # load the transformer
 tf = returnTF() # image transformer
 
-# get the softmax weight
-params = list(model.parameters())
-weight_softmax = params[-2].data.numpy()
-weight_softmax[weight_softmax<0] = 0
-
-# load the test image
-img_url = 'http://places.csail.mit.edu/demo/6.jpg'
-os.system('wget %s -q -O test.jpg' % img_url)
-img = Image.open('test.jpg')
-input_img = V(tf(img).unsqueeze(0))
-
-# forward pass
-logit = model.forward(input_img)
-h_x = F.softmax(logit, 1).data.squeeze()
-probs, idx = h_x.sort(0, True)
-probs = probs.numpy()
-idx = idx.numpy()
-
-print('RESULT ON ' + img_url)
-
-# output the IO prediction
-io_image = np.mean(labels_IO[idx[:10]]) # vote for the indoor or outdoor
-if io_image < 0.5:
-    print('--TYPE OF ENVIRONMENT: indoor')
-else:
-    print('--TYPE OF ENVIRONMENT: outdoor')
-
-# output the prediction of scene category
-print('--SCENE CATEGORIES:')
-for i in range(0, 5):
-    print('{:.3f} -> {}'.format(probs[i], classes[idx[i]]))
-
-# output the scene attributes
-responses_attribute = W_attribute.dot(features_blobs[1])
-idx_a = np.argsort(responses_attribute)
-print('--SCENE ATTRIBUTES:')
-print(', '.join([labels_attribute[idx_a[i]] for i in range(-1,-10,-1)]))
+@dataclass
+class ExtractPlaceCNNFeatureParams:
+    image_file_path: str
+    raw_feat_output_path: str
+    output_attribute_feat: bool = False
+    attribute_feat_output_path: str = None
+    attribute_pred_output_path: str = None
+    output_category_feat: bool = False
+    category_feat_output_path: str = None
+    category_pred_output_path: str = None
+    output_CAMs: bool = False
+    CAMs_output_path: str = None
 
 
-# generate class activation mapping
-print('Class activation map is saved as cam.jpg')
-CAMs = returnCAM(features_blobs[0], weight_softmax, [idx[0]])
 
-# render the CAM and output
-img = cv2.imread('test.jpg')
-height, width, _ = img.shape
-heatmap = cv2.applyColorMap(cv2.resize(CAMs[0],(width, height)), cv2.COLORMAP_JET)
-result = heatmap * 0.4 + img * 0.5
-cv2.imwrite('cam.jpg', result)
+def extract_placeCNN_feature(params: ExtractPlaceCNNFeatureParams, model):
+    if os.path.exists(params.raw_feat_output_path):
+        return
+
+    features_blobs = []
+    # hook the feature extractor
+    def hook_feature(module, input, output):
+        features_blobs.append(np.squeeze(output.data.cpu().numpy()))
+
+    features_names = ['layer4','avgpool'] # this is the last conv layer of the resnet
+    for name in features_names:
+        model._modules.get(name).register_forward_hook(hook_feature)
+
+    # Load images
+    try:
+        img = Image.open(params.image_file_path)
+    except Exception as e:
+        with open('logs.txt', 'a') as f:
+            print(e, file=f)
+        return
+    
+    # Handle some special image format in PIL Image library and convert them into RGB to process properly
+    img = img.convert('RGB')
+    input_img = V(tf(img).unsqueeze(0))
+
+    # forward pass
+    logit = model.forward(input_img)
+    h_x = F.softmax(logit, 1).data.squeeze()
+
+    # Raw feature after processing through average pooling layer before transmitting to fully-connected layers for classification
+    raw_feature = features_blobs[1]
+    np.save(params.raw_feat_output_path, raw_feature)
+
+    # Scene category vector feature
+    if params.output_category_feat:
+        response_category = h_x.cpu().numpy()
+        np.save(params.category_feat_output_path, response_category)
+        # Output predictions of scene categories
+        probs, idx = h_x.sort(0, True)
+        probs = probs.numpy()
+        idx = idx.numpy()
+        with open(params.category_pred_output_path, 'w') as f:
+            n_preds = 5
+            for index in range(n_preds):
+                print('{:.3f} -> {}'.format(probs[index], classes[idx[index]]), file=f)
+        # CAMs heatmap output
+        if params.output_CAMs:
+            # get the softmax weight
+            _params = list(model.parameters())
+            weight_softmax = _params[-2].data.numpy()
+            weight_softmax[weight_softmax<0] = 0
+            CAMs = returnCAM(features_blobs[0], weight_softmax, [idx[0]])
+            _img = cv2.imread(params.image_file_path)
+            height, width, _ = _img.shape
+            heatmap = cv2.applyColorMap(cv2.resize(CAMs[0],(width, height)), cv2.COLORMAP_JET)
+            result = heatmap * 0.4 + _img * 0.5
+            cv2.imwrite(params.CAMs_output_path, result)
+
+    # Scence attribute vector feature
+    if params.output_attribute_feat:
+        responses_attribute = W_attribute.dot(raw_feature)
+        np.save(params.attribute_feat_output_path, responses_attribute)
+        # Output predictions of scene attributes
+        idx_a = np.argsort(responses_attribute)
+        with open(params.attribute_pred_output_path, 'w') as f:
+            n_preds = 10
+            print(', '.join([labels_attribute[idx_a[index]] for index in range(-1, -n_preds, -1)]), file=f)
+
+
+
+if __name__ == '__main__':
+
+    # load the model
+    model = load_model()
+
+    # load the test image
+    img_url = 'http://places.csail.mit.edu/demo/6.jpg'
+    os.system('wget %s -q -O test.jpg' % img_url)
+
+    attribute_output_folder_path = 'Attributes'
+    attribute_feat_output_folder = os.path.join(attribute_output_folder_path, 'feat')
+    if not os.path.exists(attribute_feat_output_folder):
+        os.makedirs(attribute_feat_output_folder)
+    attribute_pred_output_folder = os.path.join(attribute_output_folder_path, 'pred')
+    if not os.path.exists(attribute_pred_output_folder):
+        os.makedirs(attribute_pred_output_folder)
+
+    category_output_folder_path = 'Categories'
+    category_feat_output_folder = os.path.join(category_output_folder_path, 'feat')
+    if not os.path.exists(category_feat_output_folder):
+        os.makedirs(category_feat_output_folder)
+    category_pred_output_folder = os.path.join(category_output_folder_path, 'pred')
+    if not os.path.exists(category_pred_output_folder):
+        os.makedirs(category_pred_output_folder)
+
+    raw_output_folder_path = 'Raw'
+    if not os.path.exists(raw_output_folder_path):
+        os.makedirs(raw_output_folder_path)
+    
+    CAMs_output_path = 'CAMs'
+    if not os.path.exists(CAMs_output_path):
+        os.makedirs(CAMs_output_path)
+
+    params = ExtractPlaceCNNFeatureParams(
+        image_file_path = 'test.jpg',
+        raw_feat_output_path = os.path.join(raw_output_folder_path, 'test.npy'),
+        output_attribute_feat = True, 
+        attribute_feat_output_path = os.path.join(attribute_feat_output_folder, 'test.npy'),
+        attribute_pred_output_path = os.path.join(attribute_pred_output_folder, 'test.txt'),
+        output_category_feat = True,
+        category_feat_output_path = os.path.join(category_feat_output_folder, 'test.npy'),
+        category_pred_output_path = os.path.join(category_pred_output_folder, 'test.txt'),
+        output_CAMs = True,
+        CAMs_output_path = os.path.join(CAMs_output_path, 'test.jpg')
+    )
+
+    extract_placeCNN_feature(params, model)
+
+    params = ExtractPlaceCNNFeatureParams(
+        image_file_path = 'profile_picture.jpg',
+        raw_feat_output_path = os.path.join(raw_output_folder_path, 'profile_picture.npy'),
+        output_attribute_feat = True, 
+        attribute_feat_output_path = os.path.join(attribute_feat_output_folder, 'profile_picture.npy'),
+        attribute_pred_output_path = os.path.join(attribute_pred_output_folder, 'profile_picture.txt'),
+        output_category_feat = True,
+        category_feat_output_path = os.path.join(category_feat_output_folder, 'profile_picture.npy'),
+        category_pred_output_path = os.path.join(category_pred_output_folder, 'profile_picture.txt'),
+        output_CAMs = True,
+        CAMs_output_path = os.path.join(CAMs_output_path, 'profile_picture.jpg')
+    )
+
+    extract_placeCNN_feature(params, model)
