@@ -229,6 +229,8 @@ if __name__ == '__main__':
     # load the test image
     # img_url = 'http://places.csail.mit.edu/demo/6.jpg'
     # os.system('wget %s -q -O test.jpg' % img_url)
+
+    #change into working directory
     os.chdir('G:/Data_Science_Project/CenterNet_Paper')
 
     attribute_output_folder_path = 'Attributes'
@@ -255,7 +257,7 @@ if __name__ == '__main__':
     if not os.path.exists(CAMs_output_path):
         os.makedirs(CAMs_output_path)
 
-    img_dir = 'G:/Data_Science_Project/CenterNet_Paper/test_image'
+    img_dir = 'G:/Data_Science_Project/CenterNet_Paper/test_image' #image_folder
     for root, dirs, files in os.walk(img_dir):
 
         for dir in dirs:
