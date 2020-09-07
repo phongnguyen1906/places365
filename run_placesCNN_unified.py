@@ -13,7 +13,7 @@ import cv2
 from PIL import Image
 from multiprocessing import Pool
 from dataclasses import dataclass
-
+from pathlib import Path
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 print(current_dir)
@@ -227,8 +227,9 @@ if __name__ == '__main__':
     model = load_model()
 
     # load the test image
-    img_url = 'http://places.csail.mit.edu/demo/6.jpg'
-    os.system('wget %s -q -O test.jpg' % img_url)
+    # img_url = 'http://places.csail.mit.edu/demo/6.jpg'
+    # os.system('wget %s -q -O test.jpg' % img_url)
+    os.chdir('G:/Data_Science_Project/CenterNet_Paper')
 
     attribute_output_folder_path = 'Attributes'
     attribute_feat_output_folder = os.path.join(attribute_output_folder_path, 'feat')
@@ -254,32 +255,48 @@ if __name__ == '__main__':
     if not os.path.exists(CAMs_output_path):
         os.makedirs(CAMs_output_path)
 
-    params = ExtractPlaceCNNFeatureParams(
-        image_file_path = 'test.jpg',
-        raw_feat_output_path = os.path.join(raw_output_folder_path, 'test.npy'),
-        output_attribute_feat = True, 
-        attribute_feat_output_path = os.path.join(attribute_feat_output_folder, 'test.npy'),
-        attribute_pred_output_path = os.path.join(attribute_pred_output_folder, 'test.txt'),
-        output_category_feat = True,
-        category_feat_output_path = os.path.join(category_feat_output_folder, 'test.npy'),
-        category_pred_output_path = os.path.join(category_pred_output_folder, 'test.txt'),
-        output_CAMs = True,
-        CAMs_output_path = os.path.join(CAMs_output_path, 'test.jpg')
-    )
+    img_dir = 'G:/Data_Science_Project/CenterNet_Paper/test_image'
+    for root, dirs, files in os.walk(img_dir):
 
-    extract_placeCNN_feature(params, model)
+        for dir in dirs:
+            # print(dir)
+            image_raw_output_path = os.path.join(raw_output_folder_path, dir)
+            if not os.path.exists(image_raw_output_path):
+                os.makedirs(image_raw_output_path)
 
-    params = ExtractPlaceCNNFeatureParams(
-        image_file_path = 'profile_picture.jpg',
-        raw_feat_output_path = os.path.join(raw_output_folder_path, 'profile_picture.npy'),
-        output_attribute_feat = True, 
-        attribute_feat_output_path = os.path.join(attribute_feat_output_folder, 'profile_picture.npy'),
-        attribute_pred_output_path = os.path.join(attribute_pred_output_folder, 'profile_picture.txt'),
-        output_category_feat = True,
-        category_feat_output_path = os.path.join(category_feat_output_folder, 'profile_picture.npy'),
-        category_pred_output_path = os.path.join(category_pred_output_folder, 'profile_picture.txt'),
-        output_CAMs = True,
-        CAMs_output_path = os.path.join(CAMs_output_path, 'profile_picture.jpg')
-    )
+            image_attribute_feat_path = os.path.join(attribute_feat_output_folder, dir)
+            if not os.path.exists(image_attribute_feat_path):
+                os.makedirs(image_attribute_feat_path)
+            image_attribute_pred_path = os.path.join(attribute_pred_output_folder, dir)
+            if not os.path.exists(image_attribute_pred_path):
+                os.makedirs(image_attribute_pred_path)
 
-    extract_placeCNN_feature(params, model)
+            image_category_feat_path = os.path.join(category_feat_output_folder, dir)
+            if not os.path.exists(image_category_feat_path):
+                os.makedirs(image_category_feat_path)
+            image_category_pred_path = os.path.join(category_pred_output_folder, dir)
+            if not os.path.exists(image_category_pred_path):
+                os.makedirs(image_category_pred_path)
+
+            image_CAMs_path = os.path.join(CAMs_output_path, dir)
+            if not os.path.exists(image_CAMs_path):
+                os.makedirs(image_CAMs_path)
+
+            for file in os.listdir(os.path.join(root,dir)):
+                # print(file)
+                image_path = os.path.join(root, dir, file)
+                image_name = Path(image_path).resolve().stem
+                params = ExtractPlaceCNNFeatureParams(
+                    image_file_path=image_path,
+                    raw_feat_output_path=os.path.join(image_raw_output_path, f'{image_name}.npy'),
+                    output_attribute_feat=True,
+                    attribute_feat_output_path=os.path.join(image_attribute_feat_path, f'{image_name}.npy'),
+                    attribute_pred_output_path=os.path.join(image_attribute_pred_path, f'{image_name}.txt'),
+                    output_category_feat=True,
+                    category_feat_output_path=os.path.join(image_category_feat_path,  f'{image_name}.npy'),
+                    category_pred_output_path=os.path.join(image_category_pred_path, f'{image_name}.txt'),
+                    output_CAMs=True,
+                    CAMs_output_path=os.path.join(image_CAMs_path, f'{image_name}.jpg')
+                )
+                extract_placeCNN_feature(params, model)
+                print(f'extracted {image_path}')

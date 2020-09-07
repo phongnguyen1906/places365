@@ -1,0 +1,5 @@
+0.690 -> food_court
+0.163 -> cafeteria
+0.033 -> dining_hall
+0.022 -> fastfood_restaurant
+0.016 -> restaurant
