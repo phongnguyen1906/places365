@@ -104,7 +104,7 @@ class MyFNN(nn.Module):
 D_in, H1, H2, D_out = 512, 256, 128, num_class
 learning_rate = 1e-4
 #check if cuda is available:
-# train_on_gpu = torch.cuda.is_available()
+#train_on_gpu = torch.cuda.is_available()
 model = MyFNN(D_in, H1, H2, D_out)
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 model.to(device)
