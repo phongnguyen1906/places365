@@ -257,7 +257,7 @@ if __name__ == '__main__':
     if not os.path.exists(CAMs_output_path):
         os.makedirs(CAMs_output_path)
 
-    img_dir = 'G:/Data_Science_Project/CenterNet_Paper/test_image' #image_folder
+    img_dir = 'G:/Data_Science_Project/CenterNet_Paper/images' #image_folder
     for root, dirs, files in os.walk(img_dir):
 
         for dir in dirs:
