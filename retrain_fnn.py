@@ -60,7 +60,7 @@ valid_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size,
 
 class_names = dataset.classes
 num_class = len(class_names)
-print(num_class)
+# print(num_class)
 
 
 class MyFNN(nn.Module):
