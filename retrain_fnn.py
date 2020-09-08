@@ -126,7 +126,7 @@ def train_model():
     best_score = 0.0
     best_loss = 1e18
     for epoch in tqdm(range(1, n_epochs + 1)):
-        model_index = 0
+        # model_index = 0
         # keep track of training and validation loss
         train_loss = 0.0
         valid_loss = 0.0
